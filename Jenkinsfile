@@ -1,12 +1,8 @@
-// ============================================
-// Jenkins CI/CD Pipeline
-// UI + API Hybrid Automation Framework
-// ============================================
-
 pipeline {
     agent any
 
     parameters {
+
         choice(
             name: 'BROWSER',
             choices: ['chrome', 'firefox', 'edge'],
@@ -22,7 +18,7 @@ pipeline {
         booleanParam(
             name: 'HEADLESS',
             defaultValue: true,
-            description: 'Run in headless mode'
+            description: 'Run tests in headless mode'
         )
 
         string(
@@ -33,9 +29,10 @@ pipeline {
     }
 
     environment {
+
         TEST_ENV = "${params.ENV}"
-        BROWSER = "${params.BROWSER}"
-        HEADLESS = "${params.HEADLESS}"
+        TEST_BROWSER = "${params.BROWSER}"
+        HEADLESS_MODE = "${params.HEADLESS}"
         PYTHONPATH = "${WORKSPACE}"
     }
 
@@ -46,6 +43,7 @@ pipeline {
         // ============================================
 
         stage('Checkout') {
+
             steps {
 
                 checkout([
@@ -53,20 +51,19 @@ pipeline {
                     branches: [[name: '*/main']],
                     userRemoteConfigs: [[
                         url: 'https://github.com/udaychittaluri1-sys/uday-1214.git'
-                        url: 'https://github.com/udaychittaluri1-sys/uday-1214.git'
                     ]]
                 ])
 
-                echo "Code checked out successfully from GitHub repository"
-                
+                echo "Repository checked out successfully"
             }
         }
 
         // ============================================
-        // Setup Python Environment
+        // Setup Python Virtual Environment
         // ============================================
 
         stage('Setup Environment') {
+
             steps {
 
                 script {
@@ -76,7 +73,9 @@ pipeline {
                         sh '''
                             python3 -m venv venv
                             . venv/bin/activate
-                            pip install --upgrade pip
+
+                            python -m pip install --upgrade pip
+
                             pip install -r requirements.txt
                         '''
 
@@ -84,9 +83,46 @@ pipeline {
 
                         bat '''
                             python -m venv venv
+
                             call venv\\Scripts\\activate
-                            pip install --upgrade pip
+
+                            python -m pip install --upgrade pip
+
                             pip install -r requirements.txt
+                        '''
+                    }
+                }
+            }
+        }
+
+        // ============================================
+        // Verify Pytest & Allure
+        // ============================================
+
+        stage('Verify Tools') {
+
+            steps {
+
+                script {
+
+                    if (isUnix()) {
+
+                        sh '''
+                            . venv/bin/activate
+
+                            pytest --version
+
+                            allure --version || true
+                        '''
+
+                    } else {
+
+                        bat '''
+                            call venv\\Scripts\\activate
+
+                            pytest --version
+
+                            allure --version
                         '''
                     }
                 }
@@ -98,6 +134,7 @@ pipeline {
         // ============================================
 
         stage('API Health Check') {
+
             steps {
 
                 script {
@@ -106,14 +143,16 @@ pipeline {
 
                         sh '''
                             . venv/bin/activate
-                            python -c "import requests; r=requests.get('https://practice.expandtesting.com/notes/api/health-check'); print(f'API Status: {r.status_code}')"
+
+                            python -c "import requests; r=requests.get('https://practice.expandtesting.com/notes/api/health-check'); print('API Status:', r.status_code)"
                         '''
 
                     } else {
 
                         bat '''
                             call venv\\Scripts\\activate
-                            python -c "import requests; r=requests.get('https://practice.expandtesting.com/notes/api/health-check'); print(f'API Status: {r.status_code}')"
+
+                            python -c "import requests; r=requests.get('https://practice.expandtesting.com/notes/api/health-check'); print('API Status:', r.status_code)"
                         '''
                     }
                 }
@@ -121,7 +160,7 @@ pipeline {
         }
 
         // ============================================
-        // Run Complete Test Suite
+        // Run Pytest Automation
         // ============================================
 
         stage('Run Tests') {
@@ -130,17 +169,34 @@ pipeline {
 
                 script {
 
-                    def cmd = """
-                    pytest tests/ ^
-                    -v ^
-                    --junitxml=reports/results.xml ^
-                    --alluredir=reports/allure-results ^
-                    -n ${params.PARALLEL_WORKERS} ^
-                    --reruns=2 ^
-                    --reruns-delay=2
-                    """
+                    if (isUnix()) {
 
-                    runTests(cmd)
+                        sh """
+                            . venv/bin/activate
+
+                            pytest tests/ \
+                            -v \
+                            -n ${params.PARALLEL_WORKERS} \
+                            --reruns 2 \
+                            --reruns-delay 2 \
+                            --junitxml=reports/results.xml \
+                            --alluredir=reports/allure-results
+                        """
+
+                    } else {
+
+                        bat """
+                            call venv\\Scripts\\activate
+
+                            pytest tests/ ^
+                            -v ^
+                            -n ${params.PARALLEL_WORKERS} ^
+                            --reruns 2 ^
+                            --reruns-delay 2 ^
+                            --junitxml=reports\\results.xml ^
+                            --alluredir=reports\\allure-results
+                        """
+                    }
                 }
             }
         }
@@ -170,54 +226,32 @@ pipeline {
 
         always {
 
-            echo 'Archiving test artifacts...'
-
-            archiveArtifacts(
-                artifacts: 'reports/**/*',
-                allowEmptyArchive: true
-            )
+            echo 'Publishing reports...'
 
             junit(
                 testResults: 'reports/results.xml',
                 allowEmptyResults: true
             )
+
+            archiveArtifacts(
+                artifacts: 'reports/**/*',
+                allowEmptyArchive: true
+            )
         }
 
         success {
 
-            echo ' All tests PASSED!'
+            echo 'SUCCESS: All tests passed successfully!'
         }
 
         failure {
 
-            echo ' Some tests FAILED. Check Allure report for details.'
+            echo 'FAILURE: Some tests failed. Check Allure report.'
         }
 
         cleanup {
 
             cleanWs()
         }
-    }
-}
-
-// ============================================
-// Helper Function
-// ============================================
-
-def runTests(String command) {
-
-    if (isUnix()) {
-
-        sh """
-            . venv/bin/activate
-            ${command}
-        """
-
-    } else {
-
-        bat """
-            call venv\\Scripts\\activate
-            ${command}
-        """
     }
 }
