@@ -52,15 +52,13 @@ pipeline {
                     $class: 'GitSCM',
                     branches: [[name: '*/main']],
                     userRemoteConfigs: [[
-<<<<<<< HEAD
                         url: 'https://github.com/udaychittaluri1-sys/capstone-final.git'
-=======
-                        url: 'https://github.com/sudheerkasha/CAPSTONE.git'
->>>>>>> 25073146df79581f5d49c6b4022491d4f92510b8
+                        url: 'https://github.com/udaychittaluri1-sys/capstone-final.git'
                     ]]
                 ])
 
                 echo "Code checked out successfully from GitHub repository"
+                
             }
         }
 
