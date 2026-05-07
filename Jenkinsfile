@@ -52,8 +52,8 @@ pipeline {
                     $class: 'GitSCM',
                     branches: [[name: '*/main']],
                     userRemoteConfigs: [[
-                        url: 'https://github.com/udaychittaluri1-sys/capstone-final.git'
-                        url: 'https://github.com/udaychittaluri1-sys/capstone-final.git'
+                        url: 'https://github.com/udaychittaluri1-sys/uday-1214.git'
+                        url: 'https://github.com/udaychittaluri1-sys/uday-1214.git'
                     ]]
                 ])
 
