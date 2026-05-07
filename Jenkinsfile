@@ -1,131 +1,88 @@
 pipeline {
+
     agent any
+
+    environment {
+
+        PYTHON = "C:\\Users\\chitt\\AppData\\Local\\Programs\\Python\\Python311\\python.exe"
+        PYTHONPATH = "${WORKSPACE}"
+    }
 
     parameters {
 
         choice(
             name: 'BROWSER',
             choices: ['chrome', 'firefox', 'edge'],
-            description: 'Browser for UI tests'
-        )
-
-        choice(
-            name: 'ENV',
-            choices: ['dev', 'staging', 'production'],
-            description: 'Target environment'
+            description: 'Browser Selection'
         )
 
         booleanParam(
             name: 'HEADLESS',
             defaultValue: true,
-            description: 'Run tests in headless mode'
+            description: 'Run in headless mode'
         )
 
         string(
             name: 'PARALLEL_WORKERS',
             defaultValue: '4',
-            description: 'Number of parallel workers'
+            description: 'Parallel execution workers'
         )
-    }
-
-    environment {
-
-        TEST_ENV = "${params.ENV}"
-        TEST_BROWSER = "${params.BROWSER}"
-        HEADLESS_MODE = "${params.HEADLESS}"
-        PYTHONPATH = "${WORKSPACE}"
     }
 
     stages {
 
         // ============================================
-        // Checkout Source Code
+        // Checkout Repository
         // ============================================
 
         stage('Checkout') {
 
             steps {
 
-                checkout([
-                    $class: 'GitSCM',
-                    branches: [[name: '*/main']],
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/udaychittaluri1-sys/uday-1214.git'
-                    ]]
-                ])
+                git branch: 'main',
+                url: 'https://github.com/udaychittaluri1-sys/uday-1214.git'
 
-                echo "Repository checked out successfully"
+                echo "Repository cloned successfully"
             }
         }
 
         // ============================================
-        // Setup Python Virtual Environment
+        // Setup Python Environment
         // ============================================
 
         stage('Setup Environment') {
 
             steps {
 
-                script {
+                bat """
+                    "%PYTHON%" --version
 
-                    if (isUnix()) {
+                    "%PYTHON%" -m venv venv
 
-                        sh '''
-                            python3 -m venv venv
-                            . venv/bin/activate
+                    call venv\\Scripts\\activate
 
-                            python -m pip install --upgrade pip
+                    python -m pip install --upgrade pip
 
-                            pip install -r requirements.txt
-                        '''
-
-                    } else {
-
-                        bat '''
-                            python -m venv venv
-
-                            call venv\\Scripts\\activate
-
-                            python -m pip install --upgrade pip
-
-                            pip install -r requirements.txt
-                        '''
-                    }
-                }
+                    pip install -r requirements.txt
+                """
             }
         }
 
         // ============================================
-        // Verify Pytest & Allure
+        // Verify Installed Packages
         // ============================================
 
         stage('Verify Tools') {
 
             steps {
 
-                script {
+                bat """
+                    call venv\\Scripts\\activate
 
-                    if (isUnix()) {
+                    pytest --version
 
-                        sh '''
-                            . venv/bin/activate
-
-                            pytest --version
-
-                            allure --version || true
-                        '''
-
-                    } else {
-
-                        bat '''
-                            call venv\\Scripts\\activate
-
-                            pytest --version
-
-                            allure --version
-                        '''
-                    }
-                }
+                    pip list
+                """
             }
         }
 
@@ -137,67 +94,33 @@ pipeline {
 
             steps {
 
-                script {
+                bat """
+                    call venv\\Scripts\\activate
 
-                    if (isUnix()) {
-
-                        sh '''
-                            . venv/bin/activate
-
-                            python -c "import requests; r=requests.get('https://practice.expandtesting.com/notes/api/health-check'); print('API Status:', r.status_code)"
-                        '''
-
-                    } else {
-
-                        bat '''
-                            call venv\\Scripts\\activate
-
-                            python -c "import requests; r=requests.get('https://practice.expandtesting.com/notes/api/health-check'); print('API Status:', r.status_code)"
-                        '''
-                    }
-                }
+                    python -c "import requests; r=requests.get('https://practice.expandtesting.com/notes/api/health-check'); print('API Status:', r.status_code)"
+                """
             }
         }
 
         // ============================================
-        // Run Pytest Automation
+        // Run Automation Tests
         // ============================================
 
         stage('Run Tests') {
 
             steps {
 
-                script {
+                bat """
+                    call venv\\Scripts\\activate
 
-                    if (isUnix()) {
-
-                        sh """
-                            . venv/bin/activate
-
-                            pytest tests/ \
-                            -v \
-                            -n ${params.PARALLEL_WORKERS} \
-                            --reruns 2 \
-                            --reruns-delay 2 \
-                            --junitxml=reports/results.xml \
-                            --alluredir=reports/allure-results
-                        """
-
-                    } else {
-
-                        bat """
-                            call venv\\Scripts\\activate
-
-                            pytest tests/ ^
-                            -v ^
-                            -n ${params.PARALLEL_WORKERS} ^
-                            --reruns 2 ^
-                            --reruns-delay 2 ^
-                            --junitxml=reports\\results.xml ^
-                            --alluredir=reports\\allure-results
-                        """
-                    }
-                }
+                    pytest tests ^
+                    -v ^
+                    -n %PARALLEL_WORKERS% ^
+                    --reruns 2 ^
+                    --reruns-delay 2 ^
+                    --junitxml=reports\\results.xml ^
+                    --alluredir=reports\\allure-results
+                """
             }
         }
 
@@ -205,7 +128,7 @@ pipeline {
         // Generate Allure Report
         // ============================================
 
-        stage('Generate Allure Report') {
+        stage('Allure Report') {
 
             steps {
 
@@ -226,12 +149,7 @@ pipeline {
 
         always {
 
-            echo 'Publishing reports...'
-
-            junit(
-                testResults: 'reports/results.xml',
-                allowEmptyResults: true
-            )
+            junit 'reports/results.xml'
 
             archiveArtifacts(
                 artifacts: 'reports/**/*',
@@ -241,12 +159,12 @@ pipeline {
 
         success {
 
-            echo 'SUCCESS: All tests passed successfully!'
+            echo 'All tests passed successfully!'
         }
 
         failure {
 
-            echo 'FAILURE: Some tests failed. Check Allure report.'
+            echo 'Tests failed. Check Allure report.'
         }
 
         cleanup {
